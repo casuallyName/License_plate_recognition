@@ -213,7 +213,7 @@ class Ui_MainWindow(object):
         filename = path.split('/')[-1]
 
         # 尺寸适配
-        size = cv2.cv2.imdecode(np.fromfile(path, dtype=np.uint8), cv2.IMREAD_COLOR).shape
+        size = cv2.imdecode(np.fromfile(path, dtype=np.uint8), cv2.IMREAD_COLOR).shape
         if size[0] / size[1] > 1.0907:
             w = size[1] * self.label.height() / size[0]
             h = self.label.height()
