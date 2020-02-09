@@ -9,69 +9,23 @@
 
 import cv2
 import numpy as np
-from numpy.linalg import norm
 import os
 import json
 import time
-
-
-
-class StatModel(object):
-    def load(self, fn):
-        self.model = self.model.load(fn)
-
-    def save(self, fn):
-        self.model.save(fn)
-
-
-class SVM(StatModel):
-    def __init__(self, C=1, gamma=0.5):
-        self.model = cv2.ml.SVM_create()
-        self.model.setGamma(gamma)
-        self.model.setC(C)
-        self.model.setKernel(cv2.ml.SVM_RBF)
-        self.model.setType(cv2.ml.SVM_C_SVC)
-        # 不能保证包括所有省份
-
-    # 训练svm
-    def train(self, samples, responses):
-        self.model.train(samples, cv2.ml.ROW_SAMPLE, responses)
-
-    # 字符识别
-    def predict(self, samples):
-        r = self.model.predict(samples)
-        return r[1].ravel()
-
+from SVM_Train import SVM
+import SVM_Train
+from args import args
 
 class PlateRecognition():
     def __init__(self):
-        self.SZ = 20  # 训练图片长宽
-        self.MAX_WIDTH = 1000  # 原始图片最大宽度
-        self.Min_Area = 2000  # 车牌区域允许最大面积
-        self.PROVINCE_START = 1000
-
-        # 省份代码保存在provinces.json中
-        with open('provinces.json', 'r', encoding='utf-8') as f:
-            self.provinces = json.load(f)
-
-        # 车牌类型保存在cardtype.json中，便于调整
-        with open('cardtype.json', 'r', encoding='utf-8') as f:
-            self.cardtype = json.load(f)
-
-        # 字母所代表的地区保存在Prefecture.json中，便于更新
-        with open('Prefecture.json', 'r', encoding='utf-8') as f:
-            self.Prefecture = json.load(f)
-
-        # 车牌识别的部分参数保存在js中，便于根据图片分辨率做调整
-        f = open('config.js')
-        j = json.load(f)
-        for c in j["config"]:
-            if c["open"]:
-                self.cfg = c.copy()
-                break
-
-    def __del__(self):
-        self.save_traindata()
+        self.SZ = args.Size  # 训练图片长宽
+        self.MAX_WIDTH = args.MAX_WIDTH  # 原始图片最大宽度
+        self.Min_Area = args.Min_Area # 车牌区域允许最大面积
+        self.PROVINCE_START = args.PROVINCE_START
+        self.provinces = args.provinces
+        self.cardtype = args.cardtype
+        self.Prefecture = args.Prefecture
+        self.cfg = args.Pic_size
 
     # 读取图片文件
     def __imreadex(self, filename):
@@ -110,99 +64,8 @@ class PlateRecognition():
             part_cards.append(img[:, wave[0]:wave[1]])
         return part_cards
 
-    # 来自opencv的sample，用于svm训练
-    def __deskew(self, img):
-        m = cv2.moments(img)
-        if abs(m['mu02']) < 1e-2:
-            return img.copy()
-        skew = m['mu11'] / m['mu02']
-        M = np.float32([[1, skew, -0.5 * self.SZ * skew], [0, 1, 0]])
-        img = cv2.warpAffine(img, M, (self.SZ, self.SZ), flags=cv2.WARP_INVERSE_MAP | cv2.INTER_LINEAR)
-        return img
-
-    # 来自opencv的sample，用于svm训练
-    def __preprocess_hog(self, digits):
-        samples = []
-        for img in digits:
-            gx = cv2.Sobel(img, cv2.CV_32F, 1, 0)
-            gy = cv2.Sobel(img, cv2.CV_32F, 0, 1)
-            mag, ang = cv2.cartToPolar(gx, gy)
-            bin_n = 16
-            bin = np.int32(bin_n * ang / (2 * np.pi))
-            bin_cells = bin[:10, :10], bin[10:, :10], bin[:10, 10:], bin[10:, 10:]
-            mag_cells = mag[:10, :10], mag[10:, :10], mag[:10, 10:], mag[10:, 10:]
-            hists = [np.bincount(b.ravel(), m.ravel(), bin_n) for b, m in zip(bin_cells, mag_cells)]
-            hist = np.hstack(hists)
-
-            # transform to Hellinger kernel
-            eps = 1e-7
-            hist /= hist.sum() + eps
-            hist = np.sqrt(hist)
-            hist /= norm(hist) + eps
-
-            samples.append(hist)
-        return np.float32(samples)
-
-    def train_svm(self):
-        # 识别英文字母和数字
-        self.model = SVM(C=1, gamma=0.5)
-        # 识别中文
-        self.modelchinese = SVM(C=1, gamma=0.5)
-        if os.path.exists("svm.dat"):
-            self.model.load("svm.dat")
-        else:
-            chars_train = []
-            chars_label = []
-
-            for root, dirs, files in os.walk("train\\chars2"):
-                if len(os.path.basename(root)) > 1:
-                    continue
-                root_int = ord(os.path.basename(root))
-                for filename in files:
-                    filepath = os.path.join(root, filename)
-                    digit_img = cv2.imread(filepath)
-                    digit_img = cv2.cvtColor(digit_img, cv2.COLOR_BGR2GRAY)
-                    chars_train.append(digit_img)
-                    # chars_label.append(1)
-                    chars_label.append(root_int)
-
-            chars_train = list(map(self.__deskew, chars_train))
-            chars_train = self.__preprocess_hog(chars_train)
-            # chars_train = chars_train.reshape(-1, 20, 20).astype(np.float32)
-            chars_label = np.array(chars_label)
-            # print(chars_train.shape)
-            self.model.train(chars_train, chars_label)
-        if os.path.exists("svmchinese.dat"):
-            self.modelchinese.load("svmchinese.dat")
-        else:
-            chars_train = []
-            chars_label = []
-            for root, dirs, files in os.walk("train\\charsChinese"):
-                if not os.path.basename(root).startswith("zh_"):
-                    continue
-                pinyin = os.path.basename(root)
-                index = self.provinces.index(pinyin) + self.PROVINCE_START + 1  # 1是拼音对应的汉字
-                for filename in files:
-                    filepath = os.path.join(root, filename)
-                    digit_img = cv2.imread(filepath)
-                    digit_img = cv2.cvtColor(digit_img, cv2.COLOR_BGR2GRAY)
-                    chars_train.append(digit_img)
-                    # chars_label.append(1)
-                    chars_label.append(index)
-            chars_train = list(map(self.__deskew, chars_train))
-            chars_train = self.__preprocess_hog(chars_train)
-            # chars_train = chars_train.reshape(-1, 20, 20).astype(np.float32)
-            chars_label = np.array(chars_label)
-            # print(chars_train.shape)
-            self.modelchinese.train(chars_train, chars_label)
-
-    def save_traindata(self):
-        if not os.path.exists("svm.dat"):
-            self.model.save("svm.dat")
-        if not os.path.exists("svmchinese.dat"):
-            self.modelchinese.save("svmchinese.dat")
-
-    def accurate_place(self, card_img_hsv, limit1, limit2, color):
+    # 缩小车牌边界
+    def __accurate_place(self, card_img_hsv, limit1, limit2, color):
         row_num, col_num = card_img_hsv.shape[:2]
         xl = col_num
         xr = 0
@@ -418,7 +281,7 @@ class PlateRecognition():
                 continue
 
             # 根据车牌颜色再定位，缩小边缘非车牌边界
-            xl, xr, yh, yl = self.accurate_place(card_img_hsv, limit1, limit2, color)
+            xl, xr, yh, yl = self.__accurate_place(card_img_hsv, limit1, limit2, color)
             if yl == yh and xl == xr:
                 continue
             need_accurate = False
@@ -435,7 +298,7 @@ class PlateRecognition():
             if need_accurate:  # 可能x或y方向未缩小，需要再试一次
                 card_img = card_imgs[card_index]
                 card_img_hsv = cv2.cvtColor(card_img, cv2.COLOR_BGR2HSV)
-                xl, xr, yh, yl = self.accurate_place(card_img_hsv, limit1, limit2, color)
+                xl, xr, yh, yl = self.__accurate_place(card_img_hsv, limit1, limit2, color)
                 if yl == yh and xl == xr:
                     continue
                 if yl >= yh:
@@ -452,7 +315,7 @@ class PlateRecognition():
         return card_imgs, colors
 
     # 分割字符并识别车牌文字
-    def __identification(self, card_imgs, colors):
+    def __identification(self, card_imgs, colors,model,modelchinese):
         # 识别车牌中的字符
         result = {}
         predict_result = []
@@ -566,7 +429,8 @@ class PlateRecognition():
                     part_card = cv2.resize(part_card, (self.SZ, self.SZ), interpolation=cv2.INTER_AREA)
                     # cv2.imshow('part_card', part_card)
 
-                    part_card = self.__preprocess_hog([part_card])
+                    part_card = SVM_Train.preprocess_hog([part_card])
+
                     if i == 0:  # 识别汉字
                         resp = self.modelchinese.predict(part_card)  # 匹配样本
                         charactor = self.provinces[int(resp[0]) - self.PROVINCE_START]
@@ -596,12 +460,23 @@ class PlateRecognition():
     def VLPR(self, car_pic):
         result = {}
         start = time.time()
-        self.train_svm()
+        # 初始化模型
+        self.model = SVM(C=1, gamma=0.5)
+        if os.path.exists("svm.dat"):
+            self.model.load("svm.dat")
+        else:
+            raise FileNotFoundError('svm.dat')
+        self.modelchinese = SVM(C=1, gamma=0.5)
+        if os.path.exists("svmchinese.dat"):
+            self.modelchinese.load("svmchinese.dat")
+        else:
+            raise FileNotFoundError('svmchinese.dat')
+
         card_imgs, colors = self.__preTreatment(car_pic)
         if card_imgs is []:
             return
         else:
-            predict_result, roi, card_color = self.__identification(card_imgs, colors)
+            predict_result, roi, card_color = self.__identification(card_imgs, colors,self.model,self.modelchinese)
             if predict_result != []:
                 result['UseTime'] = round((time.time() - start), 2)
                 result['InputTime'] = time.strftime("%Y-%m-%d %H:%M:%S")
@@ -623,7 +498,5 @@ if __name__ == '__main__':
     c = PlateRecognition()
     result = c.VLPR('./test/蒙AGX468.jpg')
     print(result)
-    cv2.waitKey(0)
-
 
 

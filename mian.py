@@ -251,25 +251,9 @@ class MainWindow(QtWidgets.QMainWindow):
 
 
 if __name__ == "__main__":
-    if os.path.exists('provinces.json'):
-        if os.path.exists('cardtype.json'):
-            if os.path.exists('Prefecture.json'):
-                if os.path.exists('config.js'):
-                    app = QtWidgets.QApplication(sys.argv)
-                    MainWindow = MainWindow()  # QtWidgets.QMainWindow()
-                    ui = Ui_MainWindow()
-                    ui.setupUi(MainWindow)
-                    MainWindow.show()
-                    sys.exit(app.exec_())
-                else:
-                    print('未找到参数文件 config.js')
-                    RuntimeError('未找到参数文件 config.js')
-            else:
-                print('未找到 Prefecture.json 文件')
-                RuntimeError('未找到 Prefecture.json 文件')
-        else:
-            print('未找到 cardtype.json 文件')
-            RuntimeError('未找到 cardtype.json 文件')
-    else:
-        print('未找到 provinces.json 文件')
-        RuntimeError('未找到 provinces.json 文件')
+    app = QtWidgets.QApplication(sys.argv)
+    MainWindow = MainWindow()  # QtWidgets.QMainWindow()
+    ui = Ui_MainWindow()
+    ui.setupUi(MainWindow)
+    MainWindow.show()
+    sys.exit(app.exec_())
