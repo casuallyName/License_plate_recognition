@@ -10,7 +10,6 @@
 import cv2
 import numpy as np
 import os
-import json
 import time
 from SVM_Train import SVM
 import SVM_Train
@@ -114,9 +113,22 @@ class PlateRecognition():
             img = cv2.resize(img, (self.MAX_WIDTH, int(pic_hight * resize_rate)),
                              interpolation=cv2.INTER_AREA)  # 图片分辨率调整
         # cv2.imshow('Image', img)
+        '''
+        # 代码后期添加
+        # 用于处理不同亮度时色调整
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        dark_point = (gray<40)
+        target_array = gray[dark_point]
+        datk_size = int(target_array.size / gray.size * 100)
+        # datk_size为暗色占比
+        # img = cv2.addWeighted(img, 1, img, 2, 40)  # 调整亮度
+        # img = cv2.addWeighted(img, 1.5, img, 0.5, 1)  # 调整对比度
+        '''
 
 
 
+        kernel = np.array([[0, -1, 0], [-1, 5, -1], [0, -1, 0]], np.float32)  # 定义一个核
+        img = cv2.filter2D(img, -1, kernel=kernel) # 锐化
         blur = self.cfg["blur"]
         # 高斯去噪
         if blur > 0:
@@ -125,15 +137,18 @@ class PlateRecognition():
         img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         # cv2.imshow('GaussianBlur', img)
 
+
         kernel = np.ones((20, 20), np.uint8)
         img_opening = cv2.morphologyEx(img, cv2.MORPH_OPEN, kernel)  # 开运算
         img_opening = cv2.addWeighted(img, 1, img_opening, -1, 0);  # 与上一次开运算结果融合
         # cv2.imshow('img_opening', img_opening)
 
+
         # 找到图像边缘
         ret, img_thresh = cv2.threshold(img_opening, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)  # 二值化
         img_edge = cv2.Canny(img_thresh, 100, 200)
         # cv2.imshow('img_edge', img_edge)
+
 
         # 使用开运算和闭运算让图像边缘成为一个整体
         kernel = np.ones((self.cfg["morphologyr"], self.cfg["morphologyc"]), np.uint8)
@@ -150,7 +165,6 @@ class PlateRecognition():
             # cv2.findContours方法在高版本OpenCV中只返回两个参数
             contours, hierarchy = cv2.findContours(img_edge2, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
         contours = [cnt for cnt in contours if cv2.contourArea(cnt) > self.Min_Area]
-        # print(contours[0])
 
         # 逐个排除不是车牌的矩形区域
         car_contours = []
@@ -167,13 +181,11 @@ class PlateRecognition():
             # 要求矩形区域长宽比在2到5.5之间，2到5.5是车牌的长宽比，其余的矩形排除
             if wh_ratio > 2 and wh_ratio < 5.5:
                 car_contours.append(rect)
-                box = cv2.boxPoints(rect)
-                box = np.int0(box)
+                # box = cv2.boxPoints(rect)
+                # box = np.int0(box)
             # 框出所有可能的矩形
             # oldimg = cv2.drawContours(img, [box], 0, (0, 0, 255), 2)
             # cv2.imshow("Test",oldimg )
-            # print(car_contours)
-
 
         # 矩形区域可能是倾斜的矩形，需要矫正，以便使用颜色定位
         card_imgs = []
@@ -220,7 +232,8 @@ class PlateRecognition():
                 self.__point_limit(new_left_point)
                 card_img = dst[int(right_point[1]):int(heigth_point[1]), int(new_left_point[0]):int(right_point[0])]
                 card_imgs.append(card_img)
-        # cv2.imshow("card", card_imgs[0])
+        #cv2.imshow("card", card_imgs[0])
+
 
         # #____开始使用颜色定位，排除不是车牌的矩形，目前只识别蓝、绿、黄车牌
         colors = []
@@ -312,6 +325,7 @@ class PlateRecognition():
         # cv2.imshow("result", card_imgs[0])
         # cv2.imwrite('1.jpg', card_imgs[0])
         # print('颜色识别结果：' + colors[0])
+
         return card_imgs, colors
 
     # 分割字符并识别车牌文字
@@ -496,7 +510,7 @@ class PlateRecognition():
 # 测试
 if __name__ == '__main__':
     c = PlateRecognition()
-    result = c.VLPR('./test/蒙AGX468.jpg')
+    result = c.VLPR('./Test/京AD77972.jpg')
     print(result)
 
 

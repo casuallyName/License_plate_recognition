@@ -87,7 +87,7 @@ def train_svm(path):
     chars_train = []
     chars_label = []
 
-    for root, dirs, files in os.walk(os.path.join(path,'chars2')):
+    for root, dirs, files in os.walk(os.path.join(path,'chars')):
         if len(os.path.basename(root)) > 1:
             continue
         root_int = ord(os.path.basename(root))
@@ -145,3 +145,4 @@ def train_svm(path):
 if __name__ == '__main__':
     path = 'train'
     train_svm(path)
+    print('完成')
