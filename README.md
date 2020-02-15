@@ -7,6 +7,6 @@
 - PyQt5：5.11.3
 - opencv-python：3.4.3
 ----
-- Python 3.6
+- Python 3.7
 - PyQt5：5.11.3
 - opencv-python：4.2.0
