@@ -1,7 +1,6 @@
 # License_plate_recognition
-----
-车牌识别项目
-----
+# 车牌识别项目
+
 测试平台
 ----
 - Python 3.6
