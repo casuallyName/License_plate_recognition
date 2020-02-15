@@ -3,3 +3,4 @@
 
 - PyQt5：5.11.3
 - opencv-python：3.4.3
+- opencv-python：4.2.0
