@@ -242,10 +242,9 @@ class PlateRecognition():
             try:
                 # 有转换失败的可能，原因来自于上面矫正矩形出错
                 card_img_hsv = cv2.cvtColor(card_img, cv2.COLOR_BGR2HSV)
+
             except:
-                print('BGR转HSV失败')
-                card_imgs = colors = None
-                return card_imgs, colors
+                card_img_hsv = None
 
             if card_img_hsv is None:
                 continue
